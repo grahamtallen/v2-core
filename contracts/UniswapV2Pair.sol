@@ -1,6 +1,35 @@
 // Whitepaper documentation: https://docs.uniswap.org/whitepaper.pdf
 // Please double check links before you trust them. Find a 2nd primary source that verifies this is the correct link
 // Measure twice and cut once.
+
+// Liquidity Pool pairs can serve two purposes:
+// 1. Provide liquidity for a trade, meaning as long as all of the contracts requirements are met,
+// and, this contract is not "locked", a trade can be made with this contract
+// There are many controls that govern how trades are calculated in order to accoplish
+// Maintaining liquidity and not letting the price slip too much so that it becomes
+// Permanently unbalanced, and no traders or arbitragers will trade with the contract
+// Rendering all the liquidty solid and frozen
+
+// Liqudity pools can also serve as a price oracle:
+// At any time, a liqudity pool between two tokens represents the price those two tokens are trading at
+// Prices can be weighted according to the last trade made with the pool, called literally
+// "Time-weighted average price". Since liquidity pools are becoming more and more popurlar
+// And they eliminate the need for a traditional centralized order book model
+// At the time of writing this, they are becoming more and more popular for dexes (decentralized exchanges)
+// to use as a price oracle to give their users deterministic predictions when making trades
+
+// Uniswap has iterated 3 times on a model that eliminates the central limit order book
+// These contracts are for the 2nd version of the uniswap LP dex model
+// One design priority for Uniswap v2 is to minimize the surface area and complexity of
+// the core pair contract—the contract that stores liquidity providers’ assets. Any bugs in this
+// contract could be disastrous, since millions of dollars of liquidity might be stolen or frozen.
+// The first model is exactly like the 2nd one in many ways except for one central difference:
+// Uniswap v1 only allowed for ETH/<anycoin> pools, meaning that every single investment in a liqudity pool was exposed
+// to the ethereum price. In uniswap v2 they opened it up for <anycoin>/<anycoin> pools
+// so that one could make an investment without exposure to ETH
+/// there were also improvements to the math that governed liqudity mining, burning, and using these pools to swap
+//tokens.
+
 pragma solidity =0.5.16;
 
 import './interfaces/IUniswapV2Pair.sol';
