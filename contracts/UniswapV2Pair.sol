@@ -1,3 +1,6 @@
+// Whitepaper documentation: https://docs.uniswap.org/whitepaper.pdf
+// Please double check links before you trust them. Find a 2nd primary source that verifies this is the correct link
+// Measure twice and cut once.
 pragma solidity =0.5.16;
 
 import './interfaces/IUniswapV2Pair.sol';
@@ -42,6 +45,9 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
     }
 
     function _safeTransfer(address token, address to, uint value) private {
+        // these 4 lines are the most confusing things i've ever seen
+        // and I'm gonna wait till Tuesday with Amogh to try and digest them
+        // I used to thing I had a strong brain but this one broke me.
         (bool success, bytes memory data) = token.call(abi.encodeWithSelector(SELECTOR, to, value));
         require(success && (data.length == 0 || abi.decode(data, (bool))), 'UniswapV2: TRANSFER_FAILED');
     }
@@ -76,6 +82,7 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
         uint32 timeElapsed = blockTimestamp - blockTimestampLast; // overflow is desired
         if (timeElapsed > 0 && _reserve0 != 0 && _reserve1 != 0) {
             // * never overflows, and + overflow is desired
+            // TODO what does this mean above?
             price0CumulativeLast += uint(UQ112x112.encode(_reserve1).uqdiv(_reserve0)) * timeElapsed;
             price1CumulativeLast += uint(UQ112x112.encode(_reserve0).uqdiv(_reserve1)) * timeElapsed;
         }
@@ -96,6 +103,12 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
                 uint rootKLast = Math.sqrt(_kLast);
                 if (rootK > rootKLast) {
                     uint numerator = totalSupply.mul(rootK.sub(rootKLast));
+                    // in uniswap, the denominator is the rootK multiplied by 5
+                    // added to the last rootK
+
+                    // If the feeTo address is set, the protocol will begin charging a
+                    // 5-basis-point fee, which is taken as a 1/6
+                    //cut of the 30-basis-point fees earned by liquidity providers
                     uint denominator = rootK.mul(5).add(rootKLast);
                     uint liquidity = numerator / denominator;
                     if (liquidity > 0) _mint(feeTo, liquidity);
@@ -108,6 +121,13 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
 
     // this low-level function should be called from a contract which performs important safety checks
     function mint(address to) external lock returns (uint liquidity) {
+        // Collecting this 0.05% fee at the time of the trade would impose an additional gas cost on
+        //every trade. To avoid this, accumulated fees are collected only when liquidity is deposited
+        //or withdrawn. The contract computes the accumulated fees, and mints new liquidity tokens
+        //to the fee beneficiary, immediately before any tokens are minted or burned.
+        //The total collected fees can be computed by measuring the growth in √
+        //k (that is, √(x · y))
+since the last time fees were collected.6
         (uint112 _reserve0, uint112 _reserve1,) = getReserves(); // gas savings
         uint balance0 = IERC20(token0).balanceOf(address(this));
         uint balance1 = IERC20(token1).balanceOf(address(this));
@@ -144,6 +164,8 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
         amount0 = liquidity.mul(balance0) / _totalSupply; // using balances ensures pro-rata distribution
         amount1 = liquidity.mul(balance1) / _totalSupply; // using balances ensures pro-rata distribution
         require(amount0 > 0 && amount1 > 0, 'UniswapV2: INSUFFICIENT_LIQUIDITY_BURNED');
+        // burning at a low level means:
+
         _burn(address(this), liquidity);
         _safeTransfer(_token0, to, amount0);
         _safeTransfer(_token1, to, amount1);
@@ -152,14 +174,13 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
 
         _update(balance0, balance1, _reserve0, _reserve1);
         if (feeOn) kLast = uint(reserve0).mul(reserve1); // reserve0 and reserve1 are up-to-date
+        // fee is only calculated based on changes in the k values
         emit Burn(msg.sender, amount0, amount1, to);
     }
 
     // this low-level function should be called from a contract which performs important safety checks
     function swap(uint amount0Out, uint amount1Out, address to, bytes calldata data) external lock {
         require(amount0Out > 0 || amount1Out > 0, 'UniswapV2: INSUFFICIENT_OUTPUT_AMOUNT');
-        (uint112 _reserve0, uint112 _reserve1,) = getReserves(); // gas savings
-        require(amount0Out < _reserve0 && amount1Out < _reserve1, 'UniswapV2: INSUFFICIENT_LIQUIDITY');
 
         uint balance0;
         uint balance1;
@@ -179,6 +200,9 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
         { // scope for reserve{0,1}Adjusted, avoids stack too deep errors
         uint balance0Adjusted = balance0.mul(1000).sub(amount0In.mul(3));
         uint balance1Adjusted = balance1.mul(1000).sub(amount1In.mul(3));
+        // The new k value Must be greater than or equal to the previous value
+        // otherwise, liquidity has decreased
+        // TODO why 10 ^ 5 constant here?
         require(balance0Adjusted.mul(balance1Adjusted) >= uint(_reserve0).mul(_reserve1).mul(1000**2), 'UniswapV2: K');
         }
 
